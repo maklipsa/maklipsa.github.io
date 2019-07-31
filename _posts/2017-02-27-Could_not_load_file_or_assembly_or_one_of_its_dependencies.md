@@ -1,7 +1,7 @@
 ---
 layout: post
 title: Could not load file or assembly or one of its dependencies.
-description: "This post is an analysis of 'Could not load file or assembly'. Why it happens and how to diagnose it"
+description: "This post is an analysis of 'Could not load file or assembly'. Why it happens and how to diagnose it."
 modified: 2017-02-27
 tags: [.NET, cookit, Fusion log, assembly, assembly binding, assembly redirect]
 image:
@@ -10,7 +10,7 @@ image:
 
 <link rel="stylesheet" href="/assets/css/tooltips_style.css">
 
-In most cases .NET manages to solve the [DLL hell problem](https://en.wikipedia.org/wiki/DLL_Hell) pretty well, but sometimes it all falls apart, and when it does in best case scenario we see something like this:
+In most cases, .NET manages to solve the [DLL hell problem](https://en.wikipedia.org/wiki/DLL_Hell) pretty well, but sometimes it fails. When it does, in the best-case scenario, we see something like this:
 
 ```console
 Could not load file or assembly 'XXXX, Version=X.Y.Z.W, Culture=neutral, PublicKeyToken=eb42632606e9261f' or one of its dependencies. 
@@ -23,18 +23,22 @@ The much worst case is this:
 The method 'XXXX' was not found on the interface/type 'YYYY, Version=2.0.0.0, Culture=neutral, PublicKeyToken=null'.
 ```
 
-This post is an analysis of why this happens and how to diagnose it:
+This post is an analysis of why this happens and how to diagnose it.
 <!--MORE-->
 
-As the old saying goes:
+To state the obvious:
 
-`There is a log for that.`
+<div class="center">
+    <div class="button" >There is a log for that.</div>
+</div>
 
-In this case, it only needs to be turned on:
+In this case, it only needs to be turned on.
 
 ## Enable assembly binding logging (Fusion log)
 
-Assembly binding is turned on using those registry settings:
+Assembly binding logging is by default turned off since it affects performance and those logs can eat up a lot of space.
+
+Assembly binding can be turned on using those registry settings:
 
 - `HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Fusion\EnableLog` - Type of DWORD
 - `HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Fusion\ForceLog` - Type DWORD
@@ -42,9 +46,9 @@ Assembly binding is turned on using those registry settings:
 - `HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Fusion\LogResourceBinds` - Type DWORD
 - `HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Fusion\LogPath` - Type String
 
-To enable logging the first four should be set to `1` and the last to a **existing** directory path (it should also end with an `\`).
+The first four should be set to `1` and the last to an **existing** directory path (it should also end with a `\`).
 
-It can be done  manually with the use of `regedit.exe`, but since it can be automated, here are the scripts:
+It can be done manually with the use of `regedit.exe`, but since it can be automated, here are the scripts:
 
 [![Disable Fusion Log](/data/2017-02-27-Could_not_load_file_or_assembly_or_one_of_its_dependencies/reg.png){: .regIco}Disable Fusion Log](/data/2017-02-27-Could_not_load_file_or_assembly_or_one_of_its_dependencies/disable-fusionLog.reg)
 [![Enable Fusion Log](/data/2017-02-27-Could_not_load_file_or_assembly_or_one_of_its_dependencies/reg.png){: .regIco}Enable Fusion Log](/data/2017-02-27-Could_not_load_file_or_assembly_or_one_of_its_dependencies/enable-fusionLog.reg)
@@ -53,29 +57,32 @@ It can be done  manually with the use of `regedit.exe`, but since it can be auto
 > DON'T RUN THIS OR ANY OTHER SCRIPT WITHOUT CHECKING. 
 > MODIFYING REGISTRY REQUIRES ADMINISTRATOR PERMISSIONS, SO A LOT OF HARM CAN BE DONE WHEN RUNNING A SCRIPT FORM A NOT TRUSTED SOURCE.
  
-After enabling assembly binding logging,  there are two ways to continue:
+After enabling assembly binding logging, there are two ways to continue:
 
 ## Analyse assembly binding logs with Fuslogvw 
 
-Windows has a build-in tool called `Fuslogvw.exe`. It should be located in several places, but the pattern is: `C:\Program Files (x86)\Microsoft SDKs\Windows\<<SDK_VERSION>>\bin\NETFX <<RUNTIME_VERSION>> Tools\`.
+Windows has a built-in tool called `Fuslogvw.exe`. It should be located in several places, but the pattern is: `C:\Program Files (x86)\Microsoft SDKs\Windows\<<SDK_VERSION>>\bin\NETFX <<RUNTIME_VERSION>> Tools\`.
 Any version will do since the tool is available from [.NET version 1.1](https://msdn.microsoft.com/en-us/library/e74a18c4(v=vs.71).aspx), and the version numbers between 4.6.2 and 4.0 differ only in minor version.
-The tool is simple, so I won't describe how it works. I personally prefer the other way:
+The tool is simple, so I won't describe how it works. I prefer the other way:
 
 ## Reading assembly binding log files (Fusion Log)
 
-This is my preferred way to diagnose. After dealing with many Microsoft loggs, I think the assembly binding ones are the best ones.
-The files are named using a pattern like this:
+The log may look intimidating, but knowing a few things makes them easy to read.
+
+We first have to identify the assembly binding logs for the assembly causing problems.
+Assemblies are identified using a pattern like this:
 
 `[assembly name], Version=[assembly version], Culture=[culture], PublicKeyToken=[public token]`
 
-so for NLog we will have:
+In our example we are having problems with NLog, so the string we are looking for will be this:
 
 `NLog, Version=4.0.0.0, Culture=neutral, PublicKeyToken=5120e14c03d0593c`
 
-The best way to understand how .NET runtime loads assemblies let's look at the logs.<br/>
+We will find entries that succeeded and ones that failed.
+The first scenario is more straightforward, so let's look at it first.
 
 
-### The operation completed successfully.
+### A successful operation: The operation completed successfully.
 
 First an easy one - the one that succeeded.
 <br/>
@@ -110,7 +117,7 @@ First an easy one - the one that succeeded.
   </article>
 </pre>
 
-### The operation failed.
+### A failed one: The operation failed.
 
 Now for something harder, but more interesting. A failed log file. Also for NLog.
 
@@ -156,28 +163,42 @@ LOG: <span class="hint--right hint--always" aria-label="Info about the assembly 
 </article>
 </pre>
 
-## How to fix "Could not load file or assembly"?
+## The problem
 
-There can be many cases why the assembly fails to load, but 99% of them can be simplified to two solutions presented bellow:
+We can see that dot net runtime is looking for version `4.0.0.0`, but found version `3.2.1.0`. Because of this, it reports a warning `Comparing the assembly name resulted in the mismatch: Major Version` and fails in the next line.
+We know the problem. Now for the solution.
+ 
+# How to fix "Could not load file or assembly"?
 
-### Update the reference
+There can be many causes why the assembly fails to load, but 99% of them can boil down to two solutions presented below:
 
-If one of the projects in Your solution has a different version of the assembly this assembly may be copied with it down to the folder of the executable assembly often overwritten the version You would assume it should have.
-This is the reason why it is a good practice to have all references pointing to a single version of a given assembly. The easiest way to make sure that this is the case is by using `Package Manager` from Visual Studio (right click on the solution):
+## Update the reference
+
+One project in the solution has a different version of the assembly. 
+The build process copies a lot of files. The dlls can be copied with their dependencies to the destination folder overwriting the new version of the dependency with the old one.
+
+A good practice is to have all references pointing to a single version of a given assembly. 
+The easiest way to make sure that this is the case is to use Visual Studio `Package Manager` (right-click on the solution):
 
 ![](/data/2017-02-27-Could_not_load_file_or_assembly_or_one_of_its_dependencies/Package Explorer.png)
 
 And then:
 ![](/data/2017-02-27-Could_not_load_file_or_assembly_or_one_of_its_dependencies/ManagePackagesForSoution.png)
 
-Then update, build, test, commit and push.<br/>
-Things may not always be that as easy, because we can't control references that external libraries, like NuGet packages, have. This is when the second solution comes in:
+It displays all package versions used in the solution.
+Update them, build, test, commit and push.<br/>
+And you should be good.
+Things may not always be that as easy, because we can't control references that external libraries. This is where the second solution comes in:
 
-### Add assembly binding redirect
+## Add assembly binding redirect
 
 Look at the succeded log file, and <a href="#redirect" >the entry about a found redirect</a>.
-The runtime can be instructed to use another version of the assembly than the one that was called. This is called **binding redirect** and can be defined in the config file of the main assembly (adding this in the config file of a library won't matter for the runtime).
-In case of a Windows application, it's the `app.config` file, and in a case of an ASP app the config file structure (web.configs and down) is being searched.<br/>
+The runtime can be instructed to use another version of the assembly than the one that was called. 
+In other words, it can be redirected. 
+Binding redirects have to be defined in the config file of the **executing assembly**.
+The runtime will ignore binding redirects present in not executing assemblies.
+
+In case of a Windows application, it's the `app.config` file, and in a case of an ASP app the config file structure (web.configs and down)<br/>
 An example:
 
 ```xml
@@ -200,33 +221,33 @@ This entry is saying that all assemblies matching all the rules:
 - culture equal to `neutral`
 - having version between `0.0.0.0` and `4.0.0.0`
 
-Should be redirected to a assemble with version `4.0.0.0`.
+Should be redirected to the assemble with version `4.0.0.0`.
 
 ## Troubleshooting FusionLog
 
-### I don't see the logs from my application
+### Q: I don't see the logs from my application
 
-The application **has to be restarted** after enabling the log. When talking about IIS application the whole IIS process has to be restarted.
+**A:** The application **has to be restarted** after enabling the log. When talking about IIS application the whole IIS process has to be restarted.
 
-### I don't see the folder
+### Q: I don't see the folder
 
-You have to create the folder manually
+**A:** You have to create the folder manually
 
-### The application runs slower
+### Q: The application runs slower
 
-The logging adds some overhead, but not enough for it to be seen with a bare eye. Maybe You are doing a lot of dynamic assembly loading? 
+**A:** The logging adds some overhead, but not enough for it to be seen with a bare eye. Maybe You are doing a lot of dynamic assembly loading? 
  
-### Something is eating up my disc space
+### Q: Something is eating up my disc space
 
-Disable the log. When enabled it creates a lot of small files. The result is that they are taking up more disc space than they actual size.  
+**A:** Disable the log. When enabled it creates a lot of small files. The result is that they are taking up more disc space than they actual size.  
 
-### The logs are still being created despite disabling the logging
+### Q: The logs are still being created despite disabling the logging
 
-Restart the application process.
+**A:** Restart the application process.
 
-### Why is it called fusion log?
+### Q: Why is it called fusion log?
 
-I suspect because [fusion is the process of combining two atoms into one.](https://en.wikipedia.org/wiki/Fusion)
+**A:** I suspect because [fusion is the process of combining two atoms into one.](https://en.wikipedia.org/wiki/Fusion)
 
 <style>
 .regIco{
